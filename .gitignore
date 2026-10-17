@@ -1,0 +1,22 @@
+# Generated Python and packaging files
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+release/
+*.exe
+
+# Historical copies and machine-specific registry export
+APKRenamer-Legacy.*
+Install-ContextMenu.reg
+
+# Local application data and Android packages
+settings.json
+*.apk
+*.aab
+*.keystore
+*.jks
+.env
+.env.*
