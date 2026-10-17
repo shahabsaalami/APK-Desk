@@ -30,7 +30,8 @@ DEFAULT = {'active': 'Default', 'profiles': {'Default': {
 ACTIONS = [('info', 'مشخصات APK / Inspect'), ('rename', 'تغییر نام / Rename'),
            ('signature', 'بررسی امضا / Verify signature'), ('check', 'بررسی انتشار / Release check'),
            ('archive', 'آرشیو نسخه / Archive'), ('bundle', 'بسته تحویل / Delivery ZIP'),
-           ('compare', 'مقایسه با نسخه دیگر / Compare'), ('open', 'باز کردن در APK Desk')]
+           ('compare', 'مقایسه با نسخه دیگر / Compare'), ('install', 'نصب روی گوشی / Install APK'),
+           ('open', 'باز کردن در APK Desk')]
 
 
 def read_settings():
@@ -59,19 +60,56 @@ def tool(name):
     for env in ('ANDROID_HOME', 'ANDROID_SDK_ROOT'):
         root = os.environ.get(env)
         if root:
+            if name == 'adb':
+                candidate = Path(root) / 'platform-tools' / 'adb.exe'
+                if candidate.is_file():
+                    return candidate
             matches = sorted((Path(root) / 'build-tools').glob('*/' + name + '.exe'), reverse=True)
             if matches:
                 return matches[0]
-    raise RuntimeError(f'{name} پیدا نشد. Android SDK Build-Tools را به PATH اضافه کنید.')
+    package = 'Platform-Tools' if name == 'adb' else 'Build-Tools'
+    raise RuntimeError(f'{name} پیدا نشد. Android SDK {package} را به PATH اضافه کنید.')
 
 
-def run(args):
+def run(args, timeout=120):
     result = subprocess.run([str(x) for x in args], capture_output=True, encoding='utf-8',
-                            errors='replace', timeout=120,
+                            errors='replace', timeout=timeout,
                             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     if result.returncode:
         raise RuntimeError((result.stderr or result.stdout or 'Command failed').strip())
     return result.stdout
+
+
+def connected_devices():
+    output = run([tool('adb'), 'devices', '-l'])
+    devices, blocked = [], []
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) < 2 or line.startswith(('List of devices', '*')):
+            continue
+        serial, state = parts[:2]
+        if state == 'device':
+            model = next((p[6:].replace('_', ' ') for p in parts[2:] if p.startswith('model:')), serial)
+            devices.append({'serial': serial, 'label': f'{model} — {serial}'})
+        else:
+            blocked.append(f'{serial}: {state}')
+    if not devices:
+        details = '\n' + '\n'.join(blocked) if blocked else ''
+        raise RuntimeError('دستگاه آماده‌ای پیدا نشد. گوشی را وصل کنید، USB debugging را فعال کنید '
+                           'و پیام اجازهٔ اتصال روی گوشی را تأیید کنید. شبیه‌ساز و اتصال بی‌سیم ADB نیز پشتیبانی می‌شوند.' + details)
+    return devices
+
+
+def install_apk(path, serial):
+    path = Path(path).resolve()
+    if path.suffix.lower() != '.apk' or not path.is_file():
+        raise ValueError('یک فایل APK معتبر انتخاب کنید.')
+    if not serial:
+        raise ValueError('دستگاه مقصد انتخاب نشده است.')
+    output = run([tool('adb'), '-s', serial, 'install', '-r', path], timeout=300)
+    if not re.search(r'^Success\s*$', output, re.MULTILINE):
+        raise RuntimeError(output.strip() or 'ADB موفقیت نصب را تأیید نکرد.')
+    return f'نصب روی {serial} انجام شد.\n' + output.strip()
 
 
 def digest(path):
@@ -304,7 +342,9 @@ class APKDesk(BaseWindow):
         self.buttons = []
         for index, (name, label) in enumerate(ACTIONS[:-1]):
             button = ttk.Button(actions, text=label.split(' / ')[0], command=lambda a=name: self.execute(a))
-            button.grid(row=0,column=index,padx=3); self.buttons.append(button)
+            button.grid(row=index//4,column=index%4,padx=3,pady=3,sticky='ew'); self.buttons.append(button)
+        for col in range(4):
+            actions.grid_columnconfigure(col, weight=1)
         extra = ttk.Frame(self, padding=(12,0)); extra.pack(fill='x')
         ttk.Button(extra, text='برگرداندن آخرین تغییر نام', command=self.undo).pack(side='left')
         ttk.Label(extra, text='یادداشت انتشار:').pack(side='left',padx=8)
@@ -416,15 +456,54 @@ class APKDesk(BaseWindow):
         if action == 'compare' and len(paths) != 2:
             messagebox.showerror('APK Desk','برای مقایسه دقیقاً دو فایل انتخاب کنید.'); return
         profile, notes = self.profile(), self.notes.get()
-        if not profile['archive']:
+        if action != 'install' and not profile['archive']:
             messagebox.showerror('APK Desk','پوشهٔ آرشیو را تعیین کنید.'); return
         self.busy = True
         for button in self.buttons:
             button.configure(state='disabled')
         self.status.set('در حال پردازش…')
-        self.pool.submit(self.work, action, paths, profile, notes)
+        if action == 'install':
+            self.status.set('در حال جست‌وجوی گوشی و شبیه‌ساز…')
+            self.pool.submit(self.prepare_install, paths)
+        else:
+            self.pool.submit(self.work, action, paths, profile, notes)
 
-    def work(self, action, paths, profile, notes):
+    def prepare_install(self, paths):
+        try:
+            self.events.put(('devices', (paths, connected_devices())))
+        except Exception as error:
+            self.events.put(('log', 'خطا: ' + str(error)))
+            self.events.put(('done', None))
+
+    def choose_device(self, paths, devices):
+        def start(serial):
+            self.status.set('در حال نصب روی دستگاه انتخاب‌شده…')
+            self.pool.submit(self.work, 'install', paths, {}, '', serial)
+        if len(devices) == 1:
+            start(devices[0]['serial'])
+            return
+        dialog = tk.Toplevel(self)
+        dialog.title('انتخاب دستگاه / Select device')
+        dialog.transient(self)
+        dialog.grab_set()
+        ttk.Label(dialog, text='APK روی کدام گوشی یا شبیه‌ساز نصب شود؟', padding=12).pack()
+        choice = ttk.Combobox(dialog, values=[d['label'] for d in devices], state='readonly', width=75)
+        choice.pack(padx=12,pady=8)
+        choice.current(0)
+        def accept():
+            serial = devices[choice.current()]['serial']
+            dialog.destroy()
+            start(serial)
+        def cancel():
+            dialog.destroy()
+            self.events.put(('log', 'نصب لغو شد.'))
+            self.events.put(('done', None))
+        buttons = ttk.Frame(dialog, padding=12); buttons.pack()
+        ttk.Button(buttons, text='نصب', command=accept).pack(side='left',padx=5)
+        ttk.Button(buttons, text='انصراف', command=cancel).pack(side='left')
+        dialog.protocol('WM_DELETE_WINDOW', cancel)
+
+    def work(self, action, paths, profile, notes, device=None):
         try:
             if action == 'compare':
                 result = compare_apks(inspect_apk(paths[0]), inspect_apk(paths[1]))
@@ -432,6 +511,11 @@ class APKDesk(BaseWindow):
                 return
             for path in paths:
                 try:
+                    if action == 'install':
+                        self.events.put(('log', 'در حال نصب: ' + str(path)))
+                        result = install_apk(path, device)
+                        self.events.put(('log', str(path) + '\n' + result))
+                        continue
                     info = inspect_apk(path)
                     if action == 'info':
                         result = json.dumps(info,ensure_ascii=False,indent=2)
@@ -500,6 +584,8 @@ class APKDesk(BaseWindow):
                 event,value = self.events.get_nowait()
                 if event == 'log':
                     self.log(value)
+                elif event == 'devices':
+                    self.choose_device(*value)
                 elif event == 'renamed':
                     old,new = value
                     if old in self.files:

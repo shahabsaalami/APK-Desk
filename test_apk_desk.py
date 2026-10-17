@@ -77,5 +77,49 @@ class ReleaseTests(unittest.TestCase):
             window.pool.shutdown(wait=True)
             window.destroy()
 
+    def test_adb_lists_only_ready_devices(self):
+        output = ('List of devices attached\n'
+                  'phone-1 device product:demo model:Pixel_Test transport_id:1\n'
+                  'phone-2 unauthorized usb:1\n'
+                  'emulator-5554 device product:sdk model:sdk_gphone64\n'
+                  'phone-3 offline\n')
+        with patch.object(app, 'run', return_value=output), patch.object(app, 'tool', return_value=Path('adb.exe')):
+            devices = app.connected_devices()
+        self.assertEqual([d['serial'] for d in devices], ['phone-1', 'emulator-5554'])
+        self.assertIn('Pixel Test', devices[0]['label'])
+
+    def test_adb_no_device_and_unauthorized_errors(self):
+        for output in ('List of devices attached\n', 'List of devices attached\nphone unauthorized\n'):
+            with patch.object(app, 'run', return_value=output), patch.object(app, 'tool', return_value=Path('adb.exe')):
+                with self.assertRaisesRegex(RuntimeError, 'USB debugging'):
+                    app.connected_devices()
+
+    def test_install_uses_explicit_device_and_preserves_data(self):
+        with patch.object(app, 'tool', return_value=Path('adb.exe')), patch.object(app, 'run', return_value='Performing Streamed Install\nSuccess\n') as command:
+            result = app.install_apk(self.source, 'phone-1')
+            command.assert_called_once_with([Path('adb.exe'), '-s', 'phone-1', 'install', '-r', self.source.resolve()], timeout=300)
+        self.assertIn('انجام شد', result)
+
+    def test_install_failure_is_not_reported_as_success(self):
+        with patch.object(app, 'tool', return_value=Path('adb.exe')), patch.object(app, 'run', return_value='Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]'):
+            with self.assertRaisesRegex(RuntimeError, 'INSTALL_FAILED'):
+                app.install_apk(self.source, 'phone-1')
+
+    def test_install_worker_does_not_require_aapt(self):
+        window = app.APKDesk()
+        window.withdraw()
+        try:
+            with patch.object(app, 'inspect_apk', side_effect=AssertionError('aapt must not run')), patch.object(app, 'install_apk', return_value='Success') as install:
+                window.work('install', [str(self.source)], {}, '', 'phone-1')
+                install.assert_called_once_with(str(self.source), 'phone-1')
+                events = []
+                while not window.events.empty():
+                    events.append(window.events.get_nowait())
+                self.assertFalse(any('خطا' in str(value) for _,value in events))
+                self.assertEqual(events[-1][0], 'done')
+        finally:
+            window.pool.shutdown(wait=True)
+            window.destroy()
+
 if __name__ == '__main__':
     unittest.main()

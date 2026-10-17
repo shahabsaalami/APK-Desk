@@ -32,7 +32,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $zip = "APKDesk-$env:RELEASE_TAG-Windows-x64.zip"
           Compress-Archive -LiteralPath APKDesk.exe, Install-ContextMenu.ps1, Remove-ContextMenu.ps1, README.md -DestinationPath $zip
-          $notes = "Windows x64 portable application. Python is bundled; Android SDK Build-Tools and Java are required for APK inspection and signature verification. Extract the ZIP to a permanent folder and use the app's Install context menu button."
+          $notes = "Windows x64 portable application. Includes APK installation on phones and emulators through ADB, with device selection. Python is bundled. Android SDK Build-Tools and Java are required for APK inspection and signature verification; Android SDK Platform-Tools (ADB) is required for device installation. Extract the ZIP to a permanent folder and use the app's Install context menu button to refresh the menu after updating."
           $notes | Set-Content -LiteralPath release-notes.txt -Encoding utf8
           gh release create $env:RELEASE_TAG $zip --verify-tag --title "APK Desk $env:RELEASE_TAG" --notes-file release-notes.txt
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

@@ -15,6 +15,7 @@ A simple Windows app to manage Android APK files from your right-click menu.
 - Archive releases and create a delivery ZIP with notes and checksums.
 - Process multiple files and save settings for each project.
 - Undo the last rename.
+- Install APKs on a connected phone or emulator from the app or right-click menu.
 
 ## Get started
 
@@ -26,6 +27,14 @@ A simple Windows app to manage Android APK files from your right-click menu.
 You can also drag APK files into the app. To customize filenames, set your project details and naming pattern, then save the profile.
 
 **No Python installation is needed for the EXE.** APK inspection and signature verification require Android SDK Build-Tools (`aapt` and `apksigner.jar`) and Java. Add `aapt` and `java` to your PATH.
+
+## Install on your phone
+
+1. Install [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools) and add `adb` to your PATH (or set `ANDROID_HOME` to your SDK folder).
+2. Enable **USB debugging**, connect your phone, and allow the connection on its screen. An emulator or a paired wireless ADB device also works.
+3. Right-click an APK and choose **APK Desk → نصب روی گوشی / Install APK**.
+
+If more than one device is connected, choose the target device. You can also install multiple APK files from the main window. Existing apps are updated while keeping their data; Android may reject an update if its signature or version is incompatible. Installation itself only needs ADB, not Java or Build-Tools.
 
 ## Run from source
 
@@ -51,3 +60,5 @@ APK Desk یک ابزار سادهٔ ویندوزی برای مدیریت فای�
 می‌توانی مشخصات و امضای فایل را بررسی کنی، نامش را تغییر بدهی، نسخه‌ها را مقایسه کنی یا آرشیو و بستهٔ تحویل بسازی. برای تنظیم نام‌گذاری، اطلاعات پروژه و الگوی نام را وارد کن و **ذخیره پروفایل** را بزن.
 
 نسخهٔ اجرایی به نصب Python نیاز ندارد؛ برای بررسی APK و امضا، Android SDK Build-Tools و Java لازم است. اگر پوشهٔ برنامه را جابه‌جا کردی، نصب منوی راست‌کلیک را دوباره انجام بده.
+
+برای نصب روی گوشی، ADB را از Android SDK Platform-Tools در دسترس قرار بده، **USB debugging** را فعال کن و اجازهٔ اتصال را روی گوشی تأیید کن. بعد از راست‌کلیک روی APK، گزینهٔ **نصب روی گوشی / Install APK** را بزن. اگر چند دستگاه وصل باشند، دستگاه مقصد را انتخاب می‌کنی. پس از به‌روزرسانی برنامه، دکمهٔ **نصب منوی راست‌کلیک** را دوباره بزن تا گزینهٔ جدید اضافه شود.
