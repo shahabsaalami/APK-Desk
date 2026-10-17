@@ -1,49 +1,53 @@
 # APK Desk
 
-ابزار محلی مدیریت APK برای ویندوز. فایل‌های اصلی APK فقط هنگام انتخاب «تغییر نام» تغییر نام می‌گیرند؛ آرشیو و بستهٔ تحویل از فایل کپی می‌گیرند.
+A simple Windows app to manage Android APK files from your right-click menu.
 
-Windows toolkit for inspecting, renaming, verifying, comparing, and archiving Android APKs, with File Explorer context menu integration.
+![APK Desk preview](photo/e26962cd-cf76-40d1-b57d-31a8a2b6736e_wp.webp)
 
-## دانلود نسخهٔ ویندوز
+[Download for Windows](https://github.com/shahabsaalami/APK-Desk/releases/latest)
 
-نسخهٔ آماده را از [GitHub Releases](https://github.com/shahabsaalami/APK-Desk/releases) دانلود و ZIP را در یک پوشهٔ ثابت استخراج کنید. اجرای `APKDesk.exe` به نصب Python نیاز ندارد. Android SDK Build-Tools و Java برای خواندن APK و بررسی امضا همچنان لازم‌اند.
+## Features
 
-برنامه را اجرا کنید و «نصب منوی راست‌کلیک» را بزنید. پس از جابه‌جایی پوشه، نصب منو را تکرار کنید.
+- View app details and permissions.
+- Rename APKs using the app name, version, or your own pattern.
+- Verify APK signatures and check for common release issues.
+- Compare two APK versions.
+- Archive releases and create a delivery ZIP with notes and checksums.
+- Process multiple files and save settings for each project.
+- Undo the last rename.
 
-## استفاده
+## Get started
 
-`APKDesk.exe` را اجرا کنید. روی APK راست‌کلیک کنید و وارد منوی **APK Desk** شوید. در ویندوز ۱۱ ممکن است این منو زیر **Show more options** باشد.
+1. Download the Windows ZIP from [Releases](https://github.com/shahabsaalami/APK-Desk/releases/latest).
+2. Extract it to a folder you plan to keep.
+3. Run `APKDesk.exe` and click **نصب منوی راست‌کلیک** to add the right-click menu.
+4. Right-click an APK and choose **APK Desk**. On Windows 11, check **Show more options**.
 
-- مشخصات: پکیج، نسخه، versionCode، حداقل و هدف SDK، معماری، مجوزها، حجم و SHA-256.
-- تغییر نام: بر اساس الگوی پروفایل فعال، بدون جایگزینی فایل موجود. امکان برگشت از پنجرهٔ اصلی.
-- بررسی امضا: اعتبارسنجی با apksigner و نمایش مشخصات گواهی‌ها.
-- بررسی انتشار: تشخیص debug، نسخهٔ تکراری یا پایین‌تر، تغییر گواهی و افزایش حجم بیش از ۲۰٪ نسبت به آخرین نسخهٔ آرشیوشدهٔ همان پکیج در پوشهٔ پروفایل.
-- آرشیو: نگهداری نسخه با گزارش JSON، یادداشت انتشار و checksum در پوشهٔ جداگانه.
-- بستهٔ تحویل: ایجاد آرشیو نسخه و ZIP شامل APK، گزارش، یادداشت انتشار و checksum.
-- مقایسه: انتخاب نسخهٔ دوم و بررسی تفاوت مشخصات، مجوزها و گواهی‌ها.
+You can also drag APK files into the app. To customize filenames, set your project details and naming pattern, then save the profile.
 
-برای کار گروهی چند فایل را در پنجره اضافه کنید یا بکشید. افزودن پوشه فایل‌های APK همان پوشه را می‌خواند. عملیات روی انتخاب فعلی یا در نبود انتخاب روی تمام فهرست انجام می‌شود. راست‌کلیک برای یک فایل طراحی شده است.
+**No Python installation is needed for the EXE.** APK inspection and signature verification require Android SDK Build-Tools (`aapt` and `apksigner.jar`) and Java. Add `aapt` and `java` to your PATH.
 
-## پروفایل‌ها
+## Run from source
 
-نام پروفایل را در کادر اول بنویسید، مشتری، پروژه، الگوی نام و پوشهٔ آرشیو را تنظیم کنید و «ذخیره پروفایل» را بزنید. گزینه‌های راست‌کلیک از آخرین پروفایل ذخیره‌شده استفاده می‌کنند. فیلدهای نام:
+With Python 3.13 installed:
 
-`{app} {version} {code} {package} {date} {client} {project}`
+```powershell
+pip install -r requirements.txt
+python apk_desk.py
+```
 
-مثال: `{client}_{project}_{version}_{code}_{date}`
+To build the Windows EXE:
 
-تنظیمات و سابقهٔ برگشت در `%LOCALAPPDATA%\APKDesk` هستند. برای هر پروژه پوشهٔ آرشیو مستقل انتخاب کنید. سوابق آرشیو در زیرپوشهٔ شناسهٔ پکیج و فایل‌های `release.json` ذخیره می‌شوند.
+```powershell
+.\Build.ps1
+```
 
-## نیازمندی و ساخت
+## راهنمای فارسی
 
-Android SDK Build-Tools (`aapt.exe` و `lib/apksigner.jar`) و Java باید در دسترس باشند. aapt از PATH یا ANDROID_HOME/ANDROID_SDK_ROOT پیدا می‌شود. Java از PATH خوانده می‌شود.
+APK Desk یک ابزار سادهٔ ویندوزی برای مدیریت فایل‌های APK از منوی راست‌کلیک است.
 
-برای اجرای سورس Python و `pip install -r requirements.txt` لازم است. اجرای `Build.ps1` نسخهٔ مستقل رابط برنامه را می‌سازد؛ ابزارهای SDK و Java همچنان بیرونی هستند.
+نسخهٔ ZIP را از [بخش دانلود](https://github.com/shahabsaalami/APK-Desk/releases/latest) بگیر، استخراج کن و `APKDesk.exe` را اجرا کن. دکمهٔ **نصب منوی راست‌کلیک** را بزن؛ بعد روی هر APK راست‌کلیک کن و **APK Desk** را انتخاب کن. در ویندوز ۱۱ ممکن است منو زیر **Show more options** باشد.
 
-منوی راست‌کلیک در رجیستری حساب فعلی ثبت می‌شود و به دسترسی مدیر نیاز ندارد. نصب و حذف از داخل برنامه یا با `Install-ContextMenu.ps1` و `Remove-ContextMenu.ps1` انجام می‌شود. پس از جابه‌جایی پوشه، نصب منو را تکرار کنید.
+می‌توانی مشخصات و امضای فایل را بررسی کنی، نامش را تغییر بدهی، نسخه‌ها را مقایسه کنی یا آرشیو و بستهٔ تحویل بسازی. برای تنظیم نام‌گذاری، اطلاعات پروژه و الگوی نام را وارد کن و **ذخیره پروفایل** را بزن.
 
-نسخه‌های قدیمی، خروجی‌های ساخت و فایل رجیستری وابسته به مسیر محلی در مخزن منتشر نمی‌شوند. از دکمهٔ نصب منو در برنامه یا اسکریپت نصب برای ثبت مسیر صحیح استفاده کنید.
-
-## حدود بررسی
-
-این برنامه فایل را امضا یا منتشر نمی‌کند و جایگزین تست اجرایی، بررسی سیاست‌های فروشگاه یا ارزیابی امنیتی نیست. متفاوت بودن گواهی می‌تواند ناشی از چرخش مجاز کلید باشد و به بررسی نیاز دارد. نبود نسخهٔ قبلی به عنوان هشدار گزارش می‌شود. خطای بررسی امضا مانع نگهداری آرشیو نیست و در گزارش ثبت می‌شود.
+نسخهٔ اجرایی به نصب Python نیاز ندارد؛ برای بررسی APK و امضا، Android SDK Build-Tools و Java لازم است. اگر پوشهٔ برنامه را جابه‌جا کردی، نصب منوی راست‌کلیک را دوباره انجام بده.
