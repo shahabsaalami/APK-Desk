@@ -11,6 +11,7 @@ A simple Windows app to manage Android APK files from your right-click menu.
 - View app details and permissions.
 - Rename APKs using the app name, version, or your own pattern.
 - Verify APK signatures and check for common release issues.
+- Read the SHA-256 certificate fingerprint from an APK.
 - Compare two APK versions.
 - Archive releases and create a delivery ZIP with notes and checksums.
 - Process multiple files and save settings for each project.
@@ -57,7 +58,7 @@ APK Desk یک ابزار سادهٔ ویندوزی برای مدیریت فای�
 
 نسخهٔ ZIP را از [بخش دانلود](https://github.com/shahabsaalami/APK-Desk/releases/latest) بگیر، استخراج کن و `APKDesk.exe` را اجرا کن. دکمهٔ **نصب منوی راست‌کلیک** را بزن؛ بعد روی هر APK راست‌کلیک کن و **APK Desk** را انتخاب کن. در ویندوز ۱۱ ممکن است منو زیر **Show more options** باشد.
 
-می‌توانی مشخصات و امضای فایل را بررسی کنی، نامش را تغییر بدهی، نسخه‌ها را مقایسه کنی یا آرشیو و بستهٔ تحویل بسازی. برای تنظیم نام‌گذاری، اطلاعات پروژه و الگوی نام را وارد کن و **ذخیره پروفایل** را بزن.
+می‌توانی مشخصات و امضای فایل را بررسی کنی، اثر انگشت SHA-256 گواهی آن را ببینی، نامش را تغییر بدهی، نسخه‌ها را مقایسه کنی یا آرشیو و بستهٔ تحویل بسازی. برای تنظیم نام‌گذاری، اطلاعات پروژه و الگوی نام را وارد کن و **ذخیره پروفایل** را بزن.
 
 نسخهٔ اجرایی به نصب Python نیاز ندارد؛ برای بررسی APK و امضا، Android SDK Build-Tools و Java لازم است. اگر پوشهٔ برنامه را جابه‌جا کردی، نصب منوی راست‌کلیک را دوباره انجام بده.
 

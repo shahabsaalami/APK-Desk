@@ -1,6 +1,7 @@
 """APK Desk: local Android release management with Explorer integration."""
 import argparse
 import concurrent.futures
+from contextlib import contextmanager
 from datetime import datetime
 import hashlib
 import json
@@ -29,6 +30,7 @@ DEFAULT = {'active': 'Default', 'profiles': {'Default': {
     'archive': str(Path.home() / 'Documents' / 'APK Desk Archive')}}}
 ACTIONS = [('info', 'مشخصات APK / Inspect'), ('rename', 'تغییر نام / Rename'),
            ('signature', 'بررسی امضا / Verify signature'), ('check', 'بررسی انتشار / Release check'),
+           ('fingerprint', 'اثر انگشت گواهی / Certificate fingerprint'),
            ('archive', 'آرشیو نسخه / Archive'), ('bundle', 'بسته تحویل / Delivery ZIP'),
            ('compare', 'مقایسه با نسخه دیگر / Compare'), ('install', 'نصب روی گوشی / Install APK'),
            ('open', 'باز کردن در APK Desk')]
@@ -80,6 +82,46 @@ def run(args, timeout=120):
     return result.stdout
 
 
+@contextmanager
+def tool_compatible_apk(path):
+    """Stage APKs with non-ASCII paths under an ASCII-only temporary path.
+
+    Some Android SDK tools on Windows lose Unicode command-line arguments.
+    The original file is never modified.
+    """
+    path = Path(path).resolve()
+    if str(path).isascii():
+        yield path
+        return
+
+    candidates = [os.environ.get('TEMP'), os.environ.get('TMP')]
+    windows_dir = os.environ.get('WINDIR', r'C:\Windows')
+    candidates.append(str(Path(windows_dir) / 'Temp'))
+    last_error = None
+    for candidate in candidates:
+        if not candidate or not str(candidate).isascii():
+            continue
+        staged = None
+        try:
+            root = Path(candidate)
+            root.mkdir(parents=True, exist_ok=True)
+            fd, staged = tempfile.mkstemp(prefix='APKDesk-', suffix='.apk', dir=root)
+            os.close(fd)
+            shutil.copyfile(path, staged)
+        except OSError as error:
+            last_error = error
+            if staged and os.path.exists(staged):
+                os.unlink(staged)
+            continue
+        try:
+            yield Path(staged)
+        finally:
+            if os.path.exists(staged):
+                os.unlink(staged)
+        return
+    raise RuntimeError('برای اجرای ابزار Android نتوانستم کپی موقت با مسیر لاتین بسازم.') from last_error
+
+
 def connected_devices():
     output = run([tool('adb'), 'devices', '-l'])
     devices, blocked = [], []
@@ -124,7 +166,8 @@ def inspect_apk(path):
     path = Path(path).resolve()
     if path.suffix.lower() != '.apk' or not path.is_file():
         raise ValueError('یک فایل APK معتبر انتخاب کنید.')
-    output = run([tool('aapt'), 'dump', 'badging', path])
+    with tool_compatible_apk(path) as compatible_path:
+        output = run([tool('aapt'), 'dump', 'badging', compatible_path])
     def field(pattern, default=''):
         match = re.search(pattern, output, re.MULTILINE)
         return match.group(1) if match else default
@@ -142,16 +185,64 @@ def inspect_apk(path):
 
 
 def signature(path):
+    path = Path(path).resolve()
+    if path.suffix.lower() != '.apk' or not path.is_file():
+        raise ValueError('یک فایل APK معتبر انتخاب کنید.')
     jar = tool('aapt').parent / 'lib' / 'apksigner.jar'
     if not jar.exists():
         raise RuntimeError(f'apksigner.jar پیدا نشد: {jar}')
     java = shutil.which('java')
     if not java:
         raise RuntimeError('Java در PATH پیدا نشد.')
-    output = run([java, '-jar', jar, 'verify', '--verbose', '--print-certs', path])
+    with tool_compatible_apk(path) as compatible_path:
+        output = run([java, '-jar', jar, 'verify', '--verbose', '--print-certs', compatible_path])
     return {'verified': True,
             'certificates': sorted(re.findall(r'^Signer #\d+ certificate SHA-256 digest: (.+)$', output, re.MULTILINE)),
             'debug_certificate': 'CN=Android Debug' in output, 'details': output}
+
+
+def certificate_fingerprint(path):
+    """Return SHA-256 certificate fingerprints reported by Android apksigner."""
+    path = Path(path).resolve()
+    if path.suffix.lower() != '.apk' or not path.is_file():
+        raise ValueError('یک فایل APK معتبر انتخاب کنید.')
+
+    candidates = []
+    for env in ('ANDROID_HOME', 'ANDROID_SDK_ROOT'):
+        root = os.environ.get(env)
+        if root:
+            build_tools = Path(root) / 'build-tools'
+            candidates.extend(build_tools.glob('*/apksigner.bat'))
+            candidates.extend(build_tools.glob('*/apksigner.exe'))
+    local_app_data = os.environ.get('LOCALAPPDATA')
+    if local_app_data:
+        build_tools = Path(local_app_data) / 'Android' / 'Sdk' / 'build-tools'
+        candidates.extend(build_tools.glob('*/apksigner.bat'))
+        candidates.extend(build_tools.glob('*/apksigner.exe'))
+
+    signer = max((p for p in candidates if p.is_file()), key=lambda p: str(p), default=None)
+    if signer is None:
+        signer = shutil.which('apksigner') or shutil.which('apksigner.bat')
+    if not signer:
+        raise RuntimeError('apksigner پیدا نشد. Android SDK Build-Tools را نصب کنید یا مسیر SDK را تنظیم کنید.')
+
+    with tool_compatible_apk(path) as compatible_path:
+        if str(signer).lower().endswith('.bat'):
+            jar = Path(signer).parent / 'lib' / 'apksigner.jar'
+            java = shutil.which('java')
+            if not jar.is_file():
+                raise RuntimeError(f'apksigner.jar پیدا نشد: {jar}')
+            if not java:
+                raise RuntimeError('Java در PATH پیدا نشد.')
+            command = [java, '-jar', jar, 'verify', '--print-certs', compatible_path]
+        else:
+            command = [signer, 'verify', '--print-certs', compatible_path]
+        output = run(command)
+    fingerprints = re.findall(
+        r'^Signer #\d+ certificate SHA-256 digest: (.+)$', output, re.MULTILINE)
+    if not fingerprints:
+        raise RuntimeError('apksigner موفق شد، اما اثرانگشت SHA-256 گواهی در خروجی پیدا نشد.\n' + output.strip())
+    return fingerprints
 
 
 def safe_component(value):
@@ -456,7 +547,7 @@ class APKDesk(BaseWindow):
         if action == 'compare' and len(paths) != 2:
             messagebox.showerror('APK Desk','برای مقایسه دقیقاً دو فایل انتخاب کنید.'); return
         profile, notes = self.profile(), self.notes.get()
-        if action != 'install' and not profile['archive']:
+        if action not in ('install', 'fingerprint') and not profile['archive']:
             messagebox.showerror('APK Desk','پوشهٔ آرشیو را تعیین کنید.'); return
         self.busy = True
         for button in self.buttons:
@@ -516,7 +607,12 @@ class APKDesk(BaseWindow):
                         result = install_apk(path, device)
                         self.events.put(('log', str(path) + '\n' + result))
                         continue
-                    info = inspect_apk(path)
+                    if action == 'fingerprint':
+                        result = 'اثر انگشت SHA-256 گواهی:\n' + '\n'.join(certificate_fingerprint(path))
+                        self.events.put(('log', str(path) + '\n' + result))
+                        continue
+                    else:
+                        info = inspect_apk(path)
                     if action == 'info':
                         result = json.dumps(info,ensure_ascii=False,indent=2)
                     elif action == 'signature':
