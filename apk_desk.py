@@ -525,9 +525,16 @@ class APKDesk(BaseWindow):
         ttk.Label(report_bar, text='گزارش عملیات').pack(side='right')
         ttk.Button(report_bar, text='پاک‌کردن گزارش', command=self.clear_log).pack(side='left')
         report = ttk.Frame(frame); report.pack(fill='both',expand=True)
-        self.output = tk.Text(report, wrap='word', font=(self.ui_font, 10), state='disabled',
+        self.output = tk.Text(report, wrap='word', font=(self.ui_font, 10),
                               bg=self.palette['surface'], fg=self.palette['text'],
                               relief='flat', highlightthickness=1, highlightbackground=self.palette['border'])
+        self.report_menu = tk.Menu(self, tearoff=0)
+        self.report_menu.add_command(label='کپی', command=self.copy_log_selection)
+        self.report_menu.add_command(label='انتخاب همه', command=self.select_all_log)
+        self.output.bind('<Button-3>', self.show_report_menu)
+        self.output.bind('<KeyPress>', self.handle_report_key)
+        self.output.bind('<<Paste>>', lambda _event: 'break')
+        self.output.bind('<<Cut>>', lambda _event: 'break')
         scroll = ttk.Scrollbar(report, command=self.output.yview)
         self.output.configure(yscrollcommand=scroll.set)
         scroll.pack(side='right',fill='y'); self.output.pack(fill='both',expand=True)
@@ -612,14 +619,43 @@ class APKDesk(BaseWindow):
             self.files.clear(); self.listbox.delete(0,'end')
 
     def log(self, text):
-        self.output.configure(state='normal')
         self.output.insert('end',text + '\n\n'); self.output.see('end')
-        self.output.configure(state='disabled')
 
     def clear_log(self):
-        self.output.configure(state='normal')
         self.output.delete('1.0','end')
-        self.output.configure(state='disabled')
+
+    def copy_log_selection(self):
+        try:
+            selected = self.output.get('sel.first', 'sel.last')
+        except tk.TclError:
+            return 'break'
+        self.clipboard_clear()
+        self.clipboard_append(selected)
+        return 'break'
+
+    def select_all_log(self):
+        if self.output.get('1.0', 'end-1c'):
+            self.output.tag_add('sel', '1.0', 'end-1c')
+        return 'break'
+
+    def show_report_menu(self, event):
+        self.output.focus_set()
+        has_selection = bool(self.output.tag_ranges('sel'))
+        self.report_menu.entryconfigure('کپی', state='normal' if has_selection else 'disabled')
+        try:
+            self.report_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.report_menu.grab_release()
+        return 'break'
+
+    def handle_report_key(self, event):
+        # Keep the report read-only while retaining the standard copy/select-all shortcuts.
+        if event.state & 0x4:
+            if event.keysym.lower() == 'c':
+                return self.copy_log_selection()
+            if event.keysym.lower() == 'a':
+                return self.select_all_log()
+        return 'break'
 
     def execute(self, action):
         if self.busy:
