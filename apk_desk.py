@@ -162,6 +162,12 @@ def digest(path):
     return h.hexdigest()
 
 
+def certificate_sha256_digests(output):
+    return re.findall(
+        r'^(?:Signer #\d+ certificate|V\d+ Signer: certificate) SHA-256 digest: (.+)$',
+        output, re.MULTILINE)
+
+
 def inspect_apk(path):
     path = Path(path).resolve()
     if path.suffix.lower() != '.apk' or not path.is_file():
@@ -197,7 +203,7 @@ def signature(path):
     with tool_compatible_apk(path) as compatible_path:
         output = run([java, '-jar', jar, 'verify', '--verbose', '--print-certs', compatible_path])
     return {'verified': True,
-            'certificates': sorted(re.findall(r'^Signer #\d+ certificate SHA-256 digest: (.+)$', output, re.MULTILINE)),
+            'certificates': sorted(certificate_sha256_digests(output)),
             'debug_certificate': 'CN=Android Debug' in output, 'details': output}
 
 
@@ -238,8 +244,7 @@ def certificate_fingerprint(path):
         else:
             command = [signer, 'verify', '--print-certs', compatible_path]
         output = run(command)
-    fingerprints = re.findall(
-        r'^Signer #\d+ certificate SHA-256 digest: (.+)$', output, re.MULTILINE)
+    fingerprints = certificate_sha256_digests(output)
     if not fingerprints:
         raise RuntimeError('apksigner موفق شد، اما اثرانگشت SHA-256 گواهی در خروجی پیدا نشد.\n' + output.strip())
     return fingerprints
