@@ -1,6 +1,7 @@
 """APK Desk: local Android release management with Explorer integration."""
 import argparse
 import concurrent.futures
+import ctypes
 from contextlib import contextmanager
 from datetime import datetime
 import hashlib
@@ -25,6 +26,7 @@ except ImportError:
 
 DATA = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'APKDesk'
 CONFIG = DATA / 'settings.json'
+FONT_ASSET = Path('assets') / 'fonts' / 'Dastkhat-Regular.ttf'
 DEFAULT = {'active': 'Default', 'profiles': {'Default': {
     'client': '', 'project': '', 'pattern': '{app}_{version}_{code}',
     'archive': str(Path.home() / 'Documents' / 'APK Desk Archive')}}}
@@ -34,6 +36,35 @@ ACTIONS = [('info', 'مشخصات APK / Inspect'), ('rename', 'تغییر نام
            ('archive', 'آرشیو نسخه / Archive'), ('bundle', 'بسته تحویل / Delivery ZIP'),
            ('compare', 'مقایسه با نسخه دیگر / Compare'), ('install', 'نصب روی گوشی / Install APK'),
            ('open', 'باز کردن در APK Desk')]
+
+
+def resource_path(relative_path):
+    base = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
+    return base / relative_path
+
+
+def register_private_font(path):
+    if sys.platform != 'win32' or not path.is_file():
+        return False
+    try:
+        add_font = ctypes.WinDLL('gdi32', use_last_error=True).AddFontResourceExW
+        add_font.argtypes = [ctypes.c_wchar_p, ctypes.c_uint, ctypes.c_void_p]
+        add_font.restype = ctypes.c_int
+        return bool(add_font(str(path), 0x10, None))  # FR_PRIVATE
+    except (AttributeError, OSError):
+        return False
+
+
+def remove_private_font(path):
+    if sys.platform != 'win32' or not path.is_file():
+        return
+    try:
+        remove_font = ctypes.WinDLL('gdi32', use_last_error=True).RemoveFontResourceExW
+        remove_font.argtypes = [ctypes.c_wchar_p, ctypes.c_uint, ctypes.c_void_p]
+        remove_font.restype = ctypes.c_bool
+        remove_font(str(path), 0x10, None)
+    except (AttributeError, OSError):
+        pass
 
 
 def read_settings():
@@ -398,6 +429,9 @@ class APKDesk(BaseWindow):
         self.events = queue.Queue()
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.busy = False
+        self.font_path = resource_path(FONT_ASSET)
+        self.font_registered = register_private_font(self.font_path)
+        self.ui_font = 'Dastkhat' if self.font_registered else 'Segoe UI'
         self.protocol('WM_DELETE_WINDOW', self.close)
         style = ttk.Style(self)
         style.theme_use('clam')
@@ -405,16 +439,16 @@ class APKDesk(BaseWindow):
                         'muted': '#68758A', 'accent': '#2864DC', 'accent_hover': '#1E50B5',
                         'border': '#DCE3ED', 'danger': '#B54747'}
         self.configure(bg=self.palette['background'])
-        style.configure('.', font=('Segoe UI', 9))
+        style.configure('.', font=(self.ui_font, 10))
         style.configure('TFrame', background=self.palette['background'])
         style.configure('Top.TFrame', background=self.palette['background'])
         style.configure('TLabel', background=self.palette['background'], foreground=self.palette['text'])
         style.configure('Muted.TLabel', foreground=self.palette['muted'])
-        style.configure('Title.TLabel', font=('Segoe UI Semibold', 21), foreground=self.palette['text'])
+        style.configure('Title.TLabel', font=(self.ui_font, 21, 'bold'), foreground=self.palette['text'])
         style.configure('TLabelframe', background=self.palette['surface'], bordercolor=self.palette['border'],
                         relief='solid', borderwidth=1)
         style.configure('TLabelframe.Label', background=self.palette['surface'], foreground=self.palette['text'],
-                        font=('Segoe UI Semibold', 10))
+                        font=(self.ui_font, 11, 'bold'))
         style.configure('TButton', padding=(10, 7), background=self.palette['surface'],
                         foreground=self.palette['text'], bordercolor=self.palette['border'], relief='flat')
         style.map('TButton', background=[('active', '#EAF0FA'), ('pressed', '#DDE7F7')])
@@ -458,7 +492,7 @@ class APKDesk(BaseWindow):
         ttk.Button(bar, text='▱  افزودن پوشه', command=self.pick_folder).pack(side='left',padx=5)
         ttk.Button(bar, text='×  پاک‌کردن فهرست', command=self.clear).pack(side='left')
         ttk.Button(bar, text='▣  بازکردن آرشیو', command=self.open_archive).pack(side='right')
-        self.listbox = tk.Listbox(self, height=5, selectmode='extended', font=('Segoe UI', 10),
+        self.listbox = tk.Listbox(self, height=5, selectmode='extended', font=(self.ui_font, 10),
                                   bg=self.palette['surface'], fg=self.palette['text'],
                                   selectbackground=self.palette['accent'], selectforeground='#FFFFFF',
                                   relief='flat', highlightthickness=1, highlightbackground=self.palette['border'],
@@ -491,7 +525,9 @@ class APKDesk(BaseWindow):
         ttk.Label(report_bar, text='گزارش عملیات').pack(side='right')
         ttk.Button(report_bar, text='پاک‌کردن گزارش', command=self.clear_log).pack(side='left')
         report = ttk.Frame(frame); report.pack(fill='both',expand=True)
-        self.output = tk.Text(report, wrap='word', font=('Segoe UI', 10), state='disabled')
+        self.output = tk.Text(report, wrap='word', font=(self.ui_font, 10), state='disabled',
+                              bg=self.palette['surface'], fg=self.palette['text'],
+                              relief='flat', highlightthickness=1, highlightbackground=self.palette['border'])
         scroll = ttk.Scrollbar(report, command=self.output.yview)
         self.output.configure(yscrollcommand=scroll.set)
         scroll.pack(side='right',fill='y'); self.output.pack(fill='both',expand=True)
@@ -506,6 +542,8 @@ class APKDesk(BaseWindow):
             return
         self.pool.shutdown(wait=False)
         self.destroy()
+        if self.font_registered:
+            remove_private_font(self.font_path)
 
     def profile(self):
         return {key: var.get().strip() for key,var in self.vars.items()}

@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+datas = [('assets/fonts/Dastkhat-Regular.ttf', 'assets/fonts'), ('assets/fonts/OFL.txt', 'assets/fonts')]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('tkinterdnd2')
