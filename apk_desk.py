@@ -401,12 +401,41 @@ class APKDesk(BaseWindow):
         self.protocol('WM_DELETE_WINDOW', self.close)
         style = ttk.Style(self)
         style.theme_use('clam')
-        style.configure('TButton', padding=6)
-        top = ttk.Frame(self, padding=12); top.pack(fill='x')
-        ttk.Label(top, text='APK Desk', font=('Segoe UI', 20, 'bold')).pack(side='left')
-        ttk.Button(top, text='حذف منوی راست‌کلیک', command=lambda: self.integration(True)).pack(side='right')
-        ttk.Button(top, text='نصب منوی راست‌کلیک', command=self.integration).pack(side='right', padx=5)
-        form = ttk.LabelFrame(self, text='پروفایل پروژه / Project profile', padding=10); form.pack(fill='x', padx=12)
+        self.palette = {'background': '#F3F6FB', 'surface': '#FFFFFF', 'text': '#172033',
+                        'muted': '#68758A', 'accent': '#2864DC', 'accent_hover': '#1E50B5',
+                        'border': '#DCE3ED', 'danger': '#B54747'}
+        self.configure(bg=self.palette['background'])
+        style.configure('.', font=('Segoe UI', 9))
+        style.configure('TFrame', background=self.palette['background'])
+        style.configure('Top.TFrame', background=self.palette['background'])
+        style.configure('TLabel', background=self.palette['background'], foreground=self.palette['text'])
+        style.configure('Muted.TLabel', foreground=self.palette['muted'])
+        style.configure('Title.TLabel', font=('Segoe UI Semibold', 21), foreground=self.palette['text'])
+        style.configure('TLabelframe', background=self.palette['surface'], bordercolor=self.palette['border'],
+                        relief='solid', borderwidth=1)
+        style.configure('TLabelframe.Label', background=self.palette['surface'], foreground=self.palette['text'],
+                        font=('Segoe UI Semibold', 10))
+        style.configure('TButton', padding=(10, 7), background=self.palette['surface'],
+                        foreground=self.palette['text'], bordercolor=self.palette['border'], relief='flat')
+        style.map('TButton', background=[('active', '#EAF0FA'), ('pressed', '#DDE7F7')])
+        style.configure('Accent.TButton', background=self.palette['accent'], foreground='#FFFFFF',
+                        bordercolor=self.palette['accent'])
+        style.map('Accent.TButton', background=[('active', self.palette['accent_hover']),
+                                                ('pressed', self.palette['accent_hover'])])
+        style.configure('Danger.TButton', foreground=self.palette['danger'])
+        style.configure('TEntry', padding=6, fieldbackground=self.palette['surface'],
+                        bordercolor=self.palette['border'])
+        style.configure('TCombobox', padding=5, fieldbackground=self.palette['surface'])
+        style.configure('Status.TFrame', background='#E8EEF8')
+        style.configure('Status.TLabel', background='#E8EEF8', foreground='#30425F')
+        top = ttk.Frame(self, style='Top.TFrame', padding=(16, 13, 16, 9)); top.pack(fill='x')
+        ttk.Label(top, text='◆ APK Desk', style='Title.TLabel').pack(side='left')
+        ttk.Label(top, text='مدیریت و بررسی فایل‌های اندروید', style='Muted.TLabel').pack(side='left', padx=14, pady=(8,0))
+        ttk.Button(top, text='×  حذف منوی راست‌کلیک', style='Danger.TButton',
+                   command=lambda: self.integration(True)).pack(side='right')
+        ttk.Button(top, text='＋  نصب منوی راست‌کلیک', style='Accent.TButton',
+                   command=self.integration).pack(side='right', padx=6)
+        form = ttk.LabelFrame(self, text='پروفایل پروژه', padding=12); form.pack(fill='x', padx=16, pady=6)
         self.profile_name = tk.StringVar(value=self.settings['active'])
         self.combo = ttk.Combobox(form, textvariable=self.profile_name, values=list(self.settings['profiles']), width=18)
         self.combo.grid(row=0, column=0, padx=4)
@@ -419,35 +448,45 @@ class APKDesk(BaseWindow):
         ttk.Label(form, text='پوشه آرشیو').grid(row=1,column=0,pady=8)
         self.vars['archive'] = tk.StringVar()
         ttk.Entry(form, textvariable=self.vars['archive'], width=65).grid(row=1,column=1,columnspan=4,sticky='ew')
-        ttk.Button(form, text='انتخاب', command=self.choose_archive).grid(row=1,column=5)
-        ttk.Button(form, text='ذخیره پروفایل', command=self.save_profile).grid(row=1,column=6)
-        ttk.Label(form, text='Fields: {app} {version} {code} {package} {date} {client} {project}').grid(row=2,column=0,columnspan=7)
+        ttk.Button(form, text='▰  انتخاب', command=self.choose_archive).grid(row=1,column=5,padx=3)
+        ttk.Button(form, text='✓  ذخیره پروفایل', style='Accent.TButton', command=self.save_profile).grid(row=1,column=6,padx=3)
+        ttk.Label(form, text='فیلدهای الگو: {app}  {version}  {code}  {package}  {date}  {client}  {project}',
+                  style='Muted.TLabel').grid(row=2,column=0,columnspan=7,sticky='w',pady=(5,0))
         self.load_profile()
-        bar = ttk.Frame(self, padding=10); bar.pack(fill='x')
-        ttk.Button(bar, text='افزودن APK', command=self.pick_files).pack(side='left')
-        ttk.Button(bar, text='افزودن پوشه', command=self.pick_folder).pack(side='left',padx=4)
-        ttk.Button(bar, text='پاک‌کردن فهرست', command=self.clear).pack(side='left')
-        ttk.Button(bar, text='بازکردن آرشیو', command=self.open_archive).pack(side='right')
-        self.listbox = tk.Listbox(self, height=5, selectmode='extended', font=('Segoe UI', 10))
-        self.listbox.pack(fill='x',padx=12)
+        bar = ttk.Frame(self, padding=(16, 8)); bar.pack(fill='x')
+        ttk.Button(bar, text='＋  افزودن APK', style='Accent.TButton', command=self.pick_files).pack(side='left')
+        ttk.Button(bar, text='▱  افزودن پوشه', command=self.pick_folder).pack(side='left',padx=5)
+        ttk.Button(bar, text='×  پاک‌کردن فهرست', command=self.clear).pack(side='left')
+        ttk.Button(bar, text='▣  بازکردن آرشیو', command=self.open_archive).pack(side='right')
+        self.listbox = tk.Listbox(self, height=5, selectmode='extended', font=('Segoe UI', 10),
+                                  bg=self.palette['surface'], fg=self.palette['text'],
+                                  selectbackground=self.palette['accent'], selectforeground='#FFFFFF',
+                                  relief='flat', highlightthickness=1, highlightbackground=self.palette['border'],
+                                  highlightcolor=self.palette['accent'], activestyle='none')
+        self.listbox.pack(fill='x',padx=16)
         if DND_FILES:
             self.listbox.drop_target_register(DND_FILES)
             self.listbox.dnd_bind('<<Drop>>', lambda e: self.add_files(self.tk.splitlist(e.data)))
-        ttk.Label(self, text='فایل‌ها را اینجا رها کنید؛ عملیات روی موارد انتخاب‌شده یا تمام فهرست انجام می‌شود.').pack()
-        actions = ttk.Frame(self, padding=10); actions.pack(fill='x')
+        ttk.Label(self, text='فایل‌ها را اینجا رها کنید؛ عملیات روی موارد انتخاب‌شده یا تمام فهرست انجام می‌شود.',
+                  style='Muted.TLabel').pack(anchor='e', padx=18, pady=(5,0))
+        actions = ttk.LabelFrame(self, text='عملیات روی APK', padding=10); actions.pack(fill='x', padx=16, pady=8)
         self.buttons = []
+        icons = {'info':'ⓘ', 'rename':'✎', 'signature':'✓', 'check':'◉', 'fingerprint':'▦',
+                 'archive':'▣', 'bundle':'▧', 'compare':'⇄', 'install':'⬇'}
         for index, (name, label) in enumerate(ACTIONS[:-1]):
-            button = ttk.Button(actions, text=label.split(' / ')[0], command=lambda a=name: self.execute(a))
-            button.grid(row=index//4,column=index%4,padx=3,pady=3,sticky='ew'); self.buttons.append(button)
+            button = ttk.Button(actions, text=f"{icons.get(name, '•')}  {label.split(' / ')[0]}",
+                                command=lambda a=name: self.execute(a))
+            button.grid(row=index//4,column=index%4,padx=4,pady=4,sticky='ew'); self.buttons.append(button)
         for col in range(4):
             actions.grid_columnconfigure(col, weight=1)
-        extra = ttk.Frame(self, padding=(12,0)); extra.pack(fill='x')
-        ttk.Button(extra, text='برگرداندن آخرین تغییر نام', command=self.undo).pack(side='left')
+        extra = ttk.Frame(self, padding=(16,0)); extra.pack(fill='x')
+        ttk.Button(extra, text='↶  برگرداندن آخرین تغییر نام', command=self.undo).pack(side='left')
         ttk.Label(extra, text='یادداشت انتشار:').pack(side='left',padx=8)
         self.notes = ttk.Entry(extra); self.notes.pack(side='left',fill='x',expand=True)
         self.status = tk.StringVar(value='آماده')
-        ttk.Label(self, textvariable=self.status, padding=8).pack(fill='x')
-        frame = ttk.Frame(self); frame.pack(fill='both',expand=True,padx=12,pady=(0,12))
+        status_bar = ttk.Frame(self, style='Status.TFrame', padding=(16,7)); status_bar.pack(fill='x', padx=16, pady=(8,0))
+        ttk.Label(status_bar, textvariable=self.status, style='Status.TLabel').pack(side='right')
+        frame = ttk.Frame(self, padding=(16,8,16,14)); frame.pack(fill='both',expand=True)
         report_bar = ttk.Frame(frame, padding=(0,0,0,4)); report_bar.pack(fill='x')
         ttk.Label(report_bar, text='گزارش عملیات').pack(side='right')
         ttk.Button(report_bar, text='پاک‌کردن گزارش', command=self.clear_log).pack(side='left')
