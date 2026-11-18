@@ -448,8 +448,12 @@ class APKDesk(BaseWindow):
         self.status = tk.StringVar(value='آماده')
         ttk.Label(self, textvariable=self.status, padding=8).pack(fill='x')
         frame = ttk.Frame(self); frame.pack(fill='both',expand=True,padx=12,pady=(0,12))
-        self.output = tk.Text(frame, wrap='word', font=('Segoe UI', 10), state='disabled')
-        scroll = ttk.Scrollbar(frame, command=self.output.yview)
+        report_bar = ttk.Frame(frame, padding=(0,0,0,4)); report_bar.pack(fill='x')
+        ttk.Label(report_bar, text='گزارش عملیات').pack(side='right')
+        ttk.Button(report_bar, text='پاک‌کردن گزارش', command=self.clear_log).pack(side='left')
+        report = ttk.Frame(frame); report.pack(fill='both',expand=True)
+        self.output = tk.Text(report, wrap='word', font=('Segoe UI', 10), state='disabled')
+        scroll = ttk.Scrollbar(report, command=self.output.yview)
         self.output.configure(yscrollcommand=scroll.set)
         scroll.pack(side='right',fill='y'); self.output.pack(fill='both',expand=True)
         self.after(100, self.poll)
@@ -533,6 +537,11 @@ class APKDesk(BaseWindow):
     def log(self, text):
         self.output.configure(state='normal')
         self.output.insert('end',text + '\n\n'); self.output.see('end')
+        self.output.configure(state='disabled')
+
+    def clear_log(self):
+        self.output.configure(state='normal')
+        self.output.delete('1.0','end')
         self.output.configure(state='disabled')
 
     def execute(self, action):
