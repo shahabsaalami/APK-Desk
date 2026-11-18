@@ -35,7 +35,7 @@ ACTIONS = [('info', 'مشخصات APK / Inspect'), ('rename', 'تغییر نام
            ('fingerprint', 'اثر انگشت گواهی / Certificate fingerprint'),
            ('archive', 'آرشیو نسخه / Archive'), ('bundle', 'بسته تحویل / Delivery ZIP'),
            ('compare', 'مقایسه با نسخه دیگر / Compare'), ('install', 'نصب روی گوشی / Install APK'),
-           ('open', 'باز کردن در APK Desk')]
+           ('open', 'بازکردن برنامه APK Desk / Open APK Desk')]
 
 
 def resource_path(relative_path):
