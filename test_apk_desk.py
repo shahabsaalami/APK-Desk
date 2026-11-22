@@ -115,7 +115,7 @@ class ReleaseTests(unittest.TestCase):
         window.withdraw()
         try:
             with patch.object(app, 'inspect_apk', side_effect=AssertionError('aapt must not run')), patch.object(app, 'install_apk', return_value='Success') as install:
-                window.work('install', [str(self.source)], {}, '', 'phone-1')
+                window.work('install', [str(self.source)], {}, 'phone-1')
                 install.assert_called_once_with(str(self.source), 'phone-1')
                 events = []
                 while not window.events.empty():
