@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -30,22 +29,28 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             app.filename(self.info, dict(self.profile, pattern='{missing}'))
 
-    def test_archive_preserves_source_and_checksum(self):
-        folder = app.archive_apk(self.info,self.profile,'Release note')
-        stored = json.loads((folder/'release.json').read_text(encoding='utf-8'))
-        self.assertEqual(app.digest(stored['archived_file']),self.info['sha256'])
-        self.assertTrue(self.source.exists())
-        self.assertEqual(stored['notes'],'Release note')
-        self.assertIn('قبلاً', app.release_check(self.info,self.profile)['warnings'][0])
+    def test_archive_moves_apk_directly_into_selected_folder(self):
+        archive = Path(self.profile['archive'])
+        stored = app.archive_apk(self.info,self.profile)
+        self.assertEqual(stored.parent, archive)
+        self.assertEqual(stored.name, 'Test__App_1.0_1.apk')
+        self.assertEqual(app.digest(stored),self.info['sha256'])
+        self.assertFalse(self.source.exists())
+        self.assertEqual(list(archive.iterdir()), [stored])
+
+        archived_info = dict(self.info, path=str(stored))
+        with patch.object(app, 'inspect_apk', return_value=archived_info):
+            self.assertIn('قبلاً', app.release_check(self.info,self.profile)['warnings'][0])
         newer = dict(self.info, code='0', bytes=100, debuggable=True)
-        warnings = app.release_check(newer,self.profile)['warnings']
+        with patch.object(app, 'inspect_apk', return_value=archived_info):
+            warnings = app.release_check(newer,self.profile)['warnings']
         self.assertEqual(len(warnings),3)
 
-    def test_archive_rolls_back_failed_copy(self):
+    def test_archive_rolls_back_failed_move(self):
         changed = dict(self.info,sha256='wrong')
         with self.assertRaises(RuntimeError):
             app.archive_apk(changed,self.profile)
-        self.assertEqual(list((self.root/'archive'/'com.test').iterdir()),[])
+        self.assertEqual(list((self.root/'archive').glob('*.apk')),[])
         self.assertTrue(self.source.exists())
 
     def test_permission_and_package_comparison(self):
