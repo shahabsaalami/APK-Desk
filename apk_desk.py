@@ -16,7 +16,6 @@ import sys
 import tempfile
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-import zipfile
 
 try:
     from tkinterdnd2 import TkinterDnD, DND_FILES
@@ -33,7 +32,7 @@ DEFAULT = {'active': 'Default', 'profiles': {'Default': {
 ACTIONS = [('info', 'مشخصات APK / Inspect'), ('rename', 'تغییر نام / Rename'),
            ('signature', 'بررسی امضا / Verify signature'), ('check', 'بررسی انتشار / Release check'),
            ('fingerprint', 'اثر انگشت گواهی / Certificate fingerprint'),
-           ('archive', 'آرشیو نسخه / Archive'), ('bundle', 'بسته تحویل / Delivery ZIP'),
+           ('archive', 'آرشیو نسخه / Archive'),
            ('compare', 'مقایسه با نسخه دیگر / Compare'), ('install', 'نصب روی گوشی / Install APK'),
            ('open', 'بازکردن برنامه APK Desk / Open APK Desk')]
 
@@ -302,16 +301,26 @@ def filename(info, profile):
     return safe_component(rendered.removesuffix('.apk')) + '.apk'
 
 
+def archive_filename(info):
+    parts = (info['app'], info['version'], info['code'])
+    return '_'.join(safe_component(value) for value in parts) + '.apk'
+
+
 def archive_entries(profile, package):
-    root = Path(profile['archive']).expanduser() / safe_component(package)
+    root = Path(profile['archive']).expanduser()
     entries = []
     if root.exists():
-        for report in root.glob('*/release.json'):
+        for archived_apk in root.glob('*.apk'):
             try:
-                entry = json.loads(report.read_text(encoding='utf-8'))
-                if isinstance(entry, dict) and isinstance(entry.get('info'), dict):
-                    entries.append(entry)
-            except (ValueError, OSError):
+                info = inspect_apk(archived_apk)
+                if info['package'] != package:
+                    continue
+                entries.append({
+                    'created': datetime.fromtimestamp(archived_apk.stat().st_mtime).astimezone().isoformat(),
+                    'info': info,
+                    'signature': signature(archived_apk),
+                })
+            except Exception:
                 pass
     return sorted(entries, key=lambda x: x.get('created', ''), reverse=True)
 
@@ -343,27 +352,29 @@ def release_check(info, profile):
             'scope': 'بررسی محلی مشخصات و امضا؛ جایگزین تست برنامه یا تأیید فروشگاه نیست.'}
 
 
-def archive_apk(info, profile, notes=''):
-    root = Path(profile['archive']).expanduser() / safe_component(info['package'])
+def archive_apk(info, profile):
+    root = Path(profile['archive']).expanduser()
     root.mkdir(parents=True, exist_ok=True)
-    folder = Path(tempfile.mkdtemp(prefix=safe_component(info['version']) + '_', dir=root))
+    destination = root / archive_filename(info)
+    source = Path(info['path']).resolve()
+    if os.path.normcase(str(source)) == os.path.normcase(str(destination.resolve())):
+        return destination
+    if destination.exists():
+        raise FileExistsError('این نسخه قبلاً آرشیو شده است؛ فایل موجود جایگزین نشد: ' + str(destination))
     try:
-        destination = folder / filename(info, profile)
-        shutil.copy2(info['path'], destination)
+        shutil.move(str(source), str(destination))
         if digest(destination) != info['sha256']:
             raise RuntimeError('فایل هنگام پردازش تغییر کرده است؛ دوباره تلاش کنید.')
-        checks = release_check(info, profile)
-        report = {'created': datetime.now().astimezone().isoformat(), 'info': info,
-                  'signature': checks['signature'], 'warnings': checks['warnings'],
-                  'client': profile['client'], 'project': profile['project'], 'notes': notes,
-                  'archived_file': str(destination)}
-        write_json(folder / 'release.json', report)
-        (folder / 'CHANGELOG.txt').write_text(notes or 'No release notes provided.', encoding='utf-8')
-        (folder / 'SHA256SUMS.txt').write_text(info['sha256'] + '  ' + destination.name + '\n', encoding='utf-8')
-        return folder
+        return destination
     except Exception:
-        # Roll back only the unique release folder created by this invocation.
-        shutil.rmtree(folder)
+        if destination.exists():
+            try:
+                if not source.exists():
+                    shutil.move(str(destination), str(source))
+                else:
+                    destination.unlink()
+            except OSError:
+                pass
         raise
 
 
@@ -506,7 +517,7 @@ class APKDesk(BaseWindow):
         actions = ttk.LabelFrame(self, text='عملیات روی APK', padding=10); actions.pack(fill='x', padx=16, pady=8)
         self.buttons = []
         icons = {'info':'ⓘ', 'rename':'✎', 'signature':'✓', 'check':'◉', 'fingerprint':'▦',
-                 'archive':'▣', 'bundle':'▧', 'compare':'⇄', 'install':'⬇'}
+                 'archive':'▣', 'compare':'⇄', 'install':'⬇'}
         for index, (name, label) in enumerate(ACTIONS[:-1]):
             button = ttk.Button(actions, text=f"{icons.get(name, '•')}  {label.split(' / ')[0]}",
                                 command=lambda a=name: self.execute(a))
@@ -515,8 +526,6 @@ class APKDesk(BaseWindow):
             actions.grid_columnconfigure(col, weight=1)
         extra = ttk.Frame(self, padding=(16,0)); extra.pack(fill='x')
         ttk.Button(extra, text='↶  برگرداندن آخرین تغییر نام', command=self.undo).pack(side='left')
-        ttk.Label(extra, text='یادداشت انتشار:').pack(side='left',padx=8)
-        self.notes = ttk.Entry(extra); self.notes.pack(side='left',fill='x',expand=True)
         self.status = tk.StringVar(value='آماده')
         status_bar = ttk.Frame(self, style='Status.TFrame', padding=(16,7)); status_bar.pack(fill='x', padx=16, pady=(8,0))
         ttk.Label(status_bar, textvariable=self.status, style='Status.TLabel').pack(side='right')
@@ -673,7 +682,7 @@ class APKDesk(BaseWindow):
             paths.append(second)
         if action == 'compare' and len(paths) != 2:
             messagebox.showerror('APK Desk','برای مقایسه دقیقاً دو فایل انتخاب کنید.'); return
-        profile, notes = self.profile(), self.notes.get()
+        profile = self.profile()
         if action not in ('install', 'fingerprint') and not profile['archive']:
             messagebox.showerror('APK Desk','پوشهٔ آرشیو را تعیین کنید.'); return
         self.busy = True
@@ -684,7 +693,7 @@ class APKDesk(BaseWindow):
             self.status.set('در حال جست‌وجوی گوشی و شبیه‌ساز…')
             self.pool.submit(self.prepare_install, paths)
         else:
-            self.pool.submit(self.work, action, paths, profile, notes)
+            self.pool.submit(self.work, action, paths, profile)
 
     def prepare_install(self, paths):
         try:
@@ -696,7 +705,7 @@ class APKDesk(BaseWindow):
     def choose_device(self, paths, devices):
         def start(serial):
             self.status.set('در حال نصب روی دستگاه انتخاب‌شده…')
-            self.pool.submit(self.work, 'install', paths, {}, '', serial)
+            self.pool.submit(self.work, 'install', paths, {}, serial)
         if len(devices) == 1:
             start(devices[0]['serial'])
             return
@@ -721,7 +730,7 @@ class APKDesk(BaseWindow):
         ttk.Button(buttons, text='انصراف', command=cancel).pack(side='left')
         dialog.protocol('WM_DELETE_WINDOW', cancel)
 
-    def work(self, action, paths, profile, notes, device=None):
+    def work(self, action, paths, profile, device=None):
         try:
             if action == 'compare':
                 result = compare_apks(inspect_apk(paths[0]), inspect_apk(paths[1]))
@@ -761,16 +770,12 @@ class APKDesk(BaseWindow):
                                 record.unlink(); raise
                             self.events.put(('renamed',(path,str(target))))
                             result = 'تغییر نام انجام شد: ' + str(target)
-                    elif action in ('archive','bundle'):
-                        folder = archive_apk(info,profile,notes)
-                        if action == 'bundle':
-                            target = Path(str(folder) + '.zip')
-                            with zipfile.ZipFile(target,'x',zipfile.ZIP_DEFLATED) as bundle:
-                                for item in folder.iterdir():
-                                    bundle.write(item,item.name)
-                            result = 'بستهٔ تحویل: ' + str(target)
-                        else:
-                            result = 'آرشیو ثبت شد: ' + str(folder)
+                    elif action == 'archive':
+                        archived_apk = archive_apk(info,profile)
+                        old_path = str(Path(path).resolve())
+                        if str(archived_apk) != old_path:
+                            self.events.put(('renamed',(old_path,str(archived_apk))))
+                        result = 'فایل به آرشیو منتقل و تغییر نام داده شد: ' + str(archived_apk)
                     self.events.put(('log',str(path) + '\n' + result))
                 except Exception as error:
                     self.events.put(('log','خطا: ' + str(path) + '\n' + str(error)))

@@ -13,7 +13,7 @@ A simple Windows app to manage Android APK files from your right-click menu.
 - Verify APK signatures and check for common release issues.
 - Read the SHA-256 certificate fingerprint from an APK.
 - Compare two APK versions.
-- Archive releases and create a delivery ZIP with notes and checksums.
+- Move each APK directly into the selected archive folder and rename it using the app name, version name, and version code.
 - Process multiple files and save settings for each project.
 - Undo the last rename.
 - Install APKs on a connected phone or emulator from the app or right-click menu.
